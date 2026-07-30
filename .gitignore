@@ -1,0 +1,15 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Ansible
+.ansible/
+inventory.ini # Si contiene ips públicas o usuarios específicos, mejor no subirlo o usar plantillas
+
+# System/Misc
+.DS_Store
+.vscode/
+*.pem
+*.key

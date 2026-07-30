@@ -1,0 +1,21 @@
+# ansible/playbook.yml
+# Baseline Configuration
+
+- name: Baseline Configuration for DevSecOps VM
+  hosts: devsecops_vm
+  become: yes # This allows Ansible to run commands with sudo
+
+  tasks:
+    - name: Ping the server to verify connectivity
+      ansible.builtin.ping:
+
+    - name: Update APT cache and install basic prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - git
+          - apt-transport-https
+          - ca-certificates
+          - software-properties-common
+        state: present
+        update_cache: yes
