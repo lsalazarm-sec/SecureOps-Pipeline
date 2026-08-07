@@ -6,7 +6,7 @@
 
 # Ansible
 .ansible/
-inventory.ini # Si contiene ips públicas o usuarios específicos, mejor no subirlo o usar plantillas
+inventory.ini # If contains public IPs or specific users, better not to upload or use templates instead
 
 # System/Misc
 .DS_Store
