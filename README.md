@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛡️ DevSecOps Automated Pipeline
+#  DevSecOps Automated Pipeline
 
 **Declarative infrastructure and automated lightweight Kubernetes deployment on Microsoft Azure.**
 
@@ -12,7 +12,7 @@ Terraform · Ansible · K3s · Azure · Security-First
 
 ---
 
-## 📋 Table of Contents
+##  Table of Contents
 
 - [Overview](#-overview)
 - [Architecture & Bootstrap Sequence](#-architecture--bootstrap-sequence)
@@ -24,7 +24,7 @@ Terraform · Ansible · K3s · Azure · Security-First
 
 ---
 
-## 🔭 Overview
+##  Overview
 
 This repository implements an end-to-end **DevSecOps** pipeline that automates three critical layers of modern infrastructure:
 
@@ -38,7 +38,7 @@ This repository implements an end-to-end **DevSecOps** pipeline that automates t
 
 ---
 
-## 🧠 Architecture & Bootstrap Sequence
+##  Architecture & Bootstrap Sequence
 
 The architecture follows a **decoupled layered model** where infrastructure state never mixes with software configuration.
 
@@ -68,7 +68,7 @@ flowchart TD
     Config --"kubectl"--> Runtime
 ```
 
-### 🔐 Security Model
+###  Security Model
 
 - **Network:** NSG restricts ingress to essential ports (SSH/22, K8s API/6443) from the administrative IP only.
 - **Identity:** Azure authentication via OIDC (no secrets in code).
@@ -76,7 +76,7 @@ flowchart TD
 
 ---
 
-## 📂 Repository Structure
+##  Repository Structure
 
 ```
 devsecops-pipeline/
@@ -102,7 +102,7 @@ devsecops-pipeline/
 
 ---
 
-## 🚨 Engineering Post-Mortem
+##  Engineering Post-Mortem
 
 Documentation of critical issues resolved during development. Each entry includes **symptom**, **diagnosis**, and **resolution**.
 
@@ -132,7 +132,7 @@ Documentation of critical issues resolved during development. Each entry include
 
 ---
 
-## 🚀 Quickstart
+##  Quickstart
 
 ### Prerequisites
 
@@ -187,7 +187,7 @@ kubectl get pods -A
 
 ---
 
-## 🗺️ Roadmap
+##  Roadmap
 
 | Version | Status | Scope |
 |---------|--------|-------|
