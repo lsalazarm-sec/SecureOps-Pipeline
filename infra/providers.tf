@@ -4,18 +4,22 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100" # Recommended stable version
+      version = "~> 3.100"
     }
+  }
+
+  # Partial backend configuration
+  backend "azurerm" {
+    resource_group_name  = "rg-secureops-tfstate"
+    container_name       = "tfstate"
+    key                  = "prod.terraform.tfstate"
+    use_oidc             = true
+    # storage_account_name is purposely omitted to be injected via CI/CD
   }
 }
 
-# This is the mandatory block required by the Azure provider
 provider "azurerm" {
   features {} 
-  
-  # Instruct Terraform to use federated identity (OIDC)
   use_oidc = true 
-
-  # Skip automatic registration to prevent hangs on restricted subscriptions
   skip_provider_registration = true
 }
