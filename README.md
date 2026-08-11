@@ -6,6 +6,9 @@
 
 Terraform · Ansible · K3s · Azure · Security-First
 
+<img width="1536" height="1024" alt="Designer (2)" src="https://github.com/user-attachments/assets/cf0b4f3d-7fa8-4b7a-93a3-27e7d8774c53" />
+
+
 [Architecture](#-architecture--bootstrap-sequence) · [Post-Mortem](#-engineering-post-mortem) · [Quickstart](#-quickstart) · [Roadmap](#-roadmap)
 
 </div>
@@ -42,31 +45,8 @@ This repository implements an end-to-end **DevSecOps** pipeline that automates t
 
 The architecture follows a **decoupled layered model** where infrastructure state never mixes with software configuration.
 
-```mermaid
-flowchart TD
-    subgraph Foundation["Layer 1: Foundation"]
-        TF[Terraform]
-        AZ[Azure Resources<br/>VNet + Subnet + VM + NSG]
-        TF --> AZ
-    end
+<img width="1536" height="1024" alt="Designer (3)" src="https://github.com/user-attachments/assets/dd6f1f0d-a00a-47ef-a8ef-967a26dd7cc5" />
 
-    subgraph Config["Layer 2: Configuration"]
-        AN[Ansible]
-        BASE[OS Baseline<br/>git, curl, ca-certificates]
-        K3S[K3s Install<br/>server --write-kubeconfig-mode 644]
-        AN --> BASE
-        AN --> K3S
-    end
-
-    subgraph Runtime["Layer 3: Runtime"]
-        KC[kubectl]
-        CLUSTER[K3s Cluster<br/>Containerized Workloads]
-        KC --> CLUSTER
-    end
-
-    Foundation --"SSH (22)"--> Config
-    Config --"kubectl"--> Runtime
-```
 
 ###  Security Model
 
