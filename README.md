@@ -130,6 +130,13 @@ By splitting the persistent state (`tfstate` group) from the ephemeral compute (
 The `infra` group can be safely destroyed daily to save costs without corrupting the pipeline's memory.
 
    <br>![Azure Resources Verified](docs/Gifs/08-azure-resources-verified.gif)
+
+
+### Phase 4: FinOps Automated Teardown & Cleanup
+
+This recording demonstrates the execution of the `teardown.sh` script, which safely and entirely dismantles the Azure infrastructure using Terraform. It highlights the practical application of FinOps principles—ensuring no orphaned resources remain to generate unexpected cloud costs. Additionally, it showcases the successful resolution of local state validation checks by correctly injecting the required cryptographic keys before triggering the remote destruction.
+
+   <br>![FinOps Teardown Execution](docs/Gifs/09-finops-teardown.gif)
 ---
 
 ## Engineering Post-Mortem
@@ -170,6 +177,17 @@ Documentation of critical issues resolved during development, reflecting a matur
 | **Symptom** | `[WARNING]: No inventory was parsed, only implicit localhost is available`. |
 | **Diagnosis** | The `ansible-playbook` command did not reference [`inventory.ini`](ansible/inventory.ini), causing tasks to run on `localhost`. |
 | **Resolution** | Standardized execution to always require explicit inventory: `ansible-playbook -i inventory.ini <playbook>`. |
+
+### 6. State Backend Synchronization Lock
+* **Symptom:** `teardown.sh` script failed locally with `Error: Backend configuration changed`.
+* **Root Cause:** The local `.terraform` cache was out of sync with the latest remote state managed by the Azure DevOps pipeline (State Mismatch).
+* **Resolution:** Hardened the teardown script by adding the `-reconfigure` flag (`terraform init -reconfigure`). This forces the local CLI to ignore stale local caches and pull the absolute truth directly from the remote Azure Storage Account.
+
+### 7. CI/CD vs. Local Environment Drift (The Ephemeral Key Blocker)
+* **Symptom:** Local execution of `teardown.sh` failed during the validation phase with `Error: decoding "admin_ssh_key.0.public_key" for public key data`.
+* **Root Cause:** The `main.tf` configuration relies on the `file("ephemeral_ssh_key.pub")` function. In the CI/CD pipeline, this file is dynamically generated. Locally, the file did not exist. When running a `destroy` command, Terraform validates local file syntax before reading the remote state. It read an empty/missing file and failed Azure's strict cryptographic validation.
+* **Resolution:** Bypassed the local validation by injecting a mathematically valid public key into the expected path (`cp ~/.ssh/id_ed25519.pub ../infra/ephemeral_ssh_key.pub`). This satisfied the provider's local syntax check, allowing Terraform to proceed with the state-based destruction. 
+* **SRE Takeaway:** When IaC relies on dynamically generated local files in CI/CD, local state operations (Plan/Destroy) will fail unless the ephemeral file structure is mocked or replicated locally prior to execution.
 
 ---
 
