@@ -8,13 +8,13 @@ trigger:
   - main # Triggers the pipeline automatically on every push to the main branch
 
 pool:
-  vmImage: 'ubuntu-latest' # The Microsoft-hosted agent that will execute this pipeline
+  vmImage: "ubuntu-latest" # The Microsoft-hosted agent that will execute this pipeline
 
 variables:
   # OIDC Service Connection for secretless Azure authentication
-  SERVICE_CONNECTION: 'az-secureops-oidc-conn'
+  SERVICE_CONNECTION: "az-secureops-oidc-conn"
   # Pinning Terraform version for immutable and predictable builds (SRE Best Practice)
-  TF_VERSION: '1.9.4' 
+  TF_VERSION: "1.9.4"
 
 jobs:
   # ============================================================================
@@ -22,35 +22,49 @@ jobs:
   # Purpose: Prepares the environment, authenticates via OIDC, and evaluates IaC
   # ============================================================================
   - job: TerraformPlan
-    displayName: 'Evaluate and Plan Infrastructure'
+    displayName: "Evaluate and Plan Infrastructure"
     steps:
-      
       # ------------------------------------------------------------------------
       # STEP 1: Toolchain Setup
+      # ------------------------------------------------------------------------
+
       # Description: Native agents might lack Terraform or have breaking versions.
       # This bash step explicitly downloads and installs our pinned version.
-      # ------------------------------------------------------------------------
+
       - bash: |
           echo "=== Downloading Terraform v$(TF_VERSION) ==="
           wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
           unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
           terraform -version
-        displayName: 'Step 1: Install Terraform CLI'
+        displayName: "Step 1: Install Terraform CLI"
 
       # ------------------------------------------------------------------------
       # STEP 2 / TASK: Authenticate and Execute IaC
-      # Description: Uses the AzureCLI@2 task to leverage OIDC federation.
-      # The 'addSpnToEnvironment' flag is critical: it injects a short-lived, 
-      # memory-only Entra ID token that Terraform consumes to access Azure.
+      #          SECURITY GATE: Static Application Security Testing (SAST)
       # ------------------------------------------------------------------------
+
+      # Description: Checkov scans the IaC files for security misconfigurations.
+      # If a critical vulnerability is found, the pipeline FAILS and BLOCKS deployment.
+
+      - bash: |
+          echo "=== 1. Installing Checkov ==="
+          pip install checkov --quiet
+
+          echo "=== 2. Running Security Scan on /infra ==="
+          checkov -d infra/
+        displayName: "Step 2: SAST Security Gate (Checkov)"
+
+      #Description: Uses the AzureCLI@2 task to leverage OIDC federation.
+      # The 'addSpnToEnvironment' flag is critical: it injects a short-lived,
+      # memory-only Entra ID token that Terraform consumes to access Azure.
       - task: AzureCLI@2
-        displayName: 'Step 2: Terraform Initialize and Plan'
+        displayName: "Step 2: Terraform Initialize and Plan"
         inputs:
           azureSubscription: $(SERVICE_CONNECTION)
           addSpnToEnvironment: true #  CRITICAL: Exposes ephemeral OIDC token
-          scriptType: 'bash'
-          scriptLocation: 'inlineScript'
+          scriptType: "bash"
+          scriptLocation: "inlineScript"
           inlineScript: |
             echo "=== 0. Mapping OIDC Tokens to Terraform ==="
             export ARM_USE_OIDC=true
