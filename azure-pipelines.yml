@@ -53,7 +53,6 @@ jobs:
           scriptLocation: 'inlineScript'
           inlineScript: |
             echo "=== 0. Mapping OIDC Tokens to Terraform ==="
-            # Connecting Azure DevOps variables to Terraform ARM_ variables
             export ARM_USE_OIDC=true
             export ARM_OIDC_TOKEN=$idToken
             export ARM_CLIENT_ID=$servicePrincipalId
@@ -63,10 +62,11 @@ jobs:
             echo "=== 1. Navigating to Infrastructure Directory ==="
             cd infra
 
+            echo "=== 1.5 Generating Ephemeral SSH Key ==="
+            ssh-keygen -t rsa -b 4096 -f ephemeral_ssh_key -q -N ""
+
             echo "=== 2. Initializing Terraform with Dynamic Backend ==="
-            # Injects the Storage Account name dynamically from DevOps Secret Variables
             terraform init -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
 
             echo "=== 3. Running Terraform Plan ==="
-            # Creates an execution plan to preview changes before applying them
             terraform plan -out=main.tfplan
