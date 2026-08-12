@@ -19,22 +19,22 @@
 
 ---
 
-## 📌 Overview
+## Overview
 
 The **SecureOps Pipeline** is an enterprise-grade DevSecOps deployment engine that automates critical layers of modern infrastructure on Azure. It enforces strict DevSecOps principles, **Shift-Left Security**, and **Zero-Trust Identity** by eliminating static credentials through Microsoft Entra ID Workload Identity Federation (OIDC).
 
 | Layer | Tool | Responsibility |
 |-------|------|----------------|
-| **CI/CD & Security** | Azure DevOps & Checkov | SAST scanning, OIDC auth, and pipeline orchestration |
-| **Infrastructure** | Terraform | Declarative provisioning of Azure resources (VNet, VM, NSG) |
-| **Configuration** | Ansible | OS hardening and runtime orchestration (agentless) |
-| **Orchestration** | K3s | Lightweight Kubernetes with secure context isolation |
+| **CI/CD & Security** | [Azure DevOps](azure-pipelines.yml) & Checkov | SAST scanning, OIDC auth, and pipeline orchestration |
+| **Infrastructure** | [Terraform](infra/main.tf) | Declarative provisioning of Azure resources (VNet, VM, NSG) |
+| **Configuration** | [Ansible](ansible/playbook.yml) | OS hardening and runtime orchestration (agentless) |
+| **Orchestration** | [K3s](ansible/k8s_setup.yml) | Lightweight Kubernetes with secure context isolation |
 
 > **Philosophy:** *Infrastructure as Code* with a clean separation of state between cloud provisioning and OS configuration, applying the **Principle of Least Privilege** at every layer.
 
 ---
 
-## 🏗️ Architecture & Design Patterns
+## Architecture & Design Patterns
 
 The architecture follows a **decoupled layered model** where infrastructure state never mixes with software configuration.
 
@@ -47,12 +47,12 @@ The architecture follows a **decoupled layered model** where infrastructure stat
 
 ### 2. State Management: "The Brain vs. The Muscle"
 To ensure safe ephemeral operations, the infrastructure design strictly separates state from compute resources:
-* **The Brain (`tfstate` Group):** A persistent Azure Storage Account that securely holds the `terraform.tfstate` file, provisioned via a local bootstrap script.
-* **The Muscle (`infra` Group):** The actual compute resources (VNet, NSG, Linux VM). This is ephemeral and can be deployed or destroyed repeatedly by the CI/CD pipeline without losing the environment's memory.
+* **The Brain (`tfstate` Group):** A persistent Azure Storage Account that securely holds the `terraform.tfstate` file, provisioned via a local [`bootstrap.sh`](scripts/bootstrap.sh) script.
+* **The Muscle (`infra` Group):** The actual compute resources (VNet, NSG, Linux VM) provisioned by [`main.tf`](infra/main.tf). This is ephemeral and can be deployed or destroyed repeatedly by the CI/CD pipeline without losing the environment's memory.
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 SecureOps-Pipeline/
@@ -70,13 +70,14 @@ SecureOps-Pipeline/
 ├── docs/Gifs/            # Pipeline execution visual evidence
 └── README.md
 ```
+*(Tip: Most references in this README are clickable links leading directly to the source code).*
 
 ---
 
-## 🎥 The DevSecOps Lifecycle (In Action)
+## The DevSecOps Lifecycle (In Action)
 
 ### Phase 1: Environment Setup & Zero-Trust
-1. **Bootstrapping the Backend:** A local bash script provisions a zero-cost Azure Storage Account (`tfstate`).
+1. **Bootstrapping the Backend:** The [`scripts/bootstrap.sh`](scripts/bootstrap.sh) bash script provisions a zero-cost Azure Storage Account (`tfstate`).
    <br>![Bootstrap Run](docs/Gifs/bootstrap-run.gif)
 2. **OIDC Federation Setup:** Configuring Workload Identity Federation in Azure DevOps.
    <br>![OIDC Setup](docs/Gifs/03-oidc-federation-setup.gif)
@@ -86,11 +87,11 @@ SecureOps-Pipeline/
 ### Phase 2: Shift-Left & Deployment
 1. **OIDC Execution:** The agent requests a short-lived token and authenticates securely.
    <br>![OIDC Execution](docs/Gifs/04b-pipeline-execution-oidc.gif)
-2. **Shift-Left Security Gate (Blocked):** Checkov SAST intercepts insecure code (e.g., exposed public IP) and halts execution.
+2. **Shift-Left Security Gate (Blocked):** Checkov SAST intercepts insecure code (e.g., exposed public IP) in [`main.tf`](infra/main.tf) and halts execution.
    <br>![Security Gate Block](docs/Gifs/05-security-gate-block.gif)
 3. **Risk Acceptance (Passed):** After mitigating vulnerabilities and adding `checkov:skip` compensatory controls, the gate passes.
    <br>![Security Gate Passed](docs/Gifs/06-security-gate-passed.gif)
-4. **Ephemeral Deployment:** Infrastructure is provisioned automatically with dynamic SSH keys.
+4. **Ephemeral Deployment:** Infrastructure is provisioned automatically via [`azure-pipelines.yml`](azure-pipelines.yml) with dynamic SSH keys.
    <br>![Terraform Apply](docs/Gifs/07-terraform-apply-success.gif)
 
 ### Phase 3: Cloud Verification
@@ -99,14 +100,14 @@ A view of the Azure Portal demonstrating the architectural decoupling of the per
 
 ---
 
-## 🧠 Engineering Post-Mortem
+## Engineering Post-Mortem
 
 Documentation of critical issues resolved during development, reflecting a mature SRE and FinOps mindset.
 
 ### 1. Orphaned Infrastructure & State Corruption (FinOps)
 | Field | Detail |
 |-------|--------|
-| **Symptom** | A local `teardown.sh` script failed mid-execution due to a missing dynamic SSH key (`ephemeral_ssh_key.pub`), ignored the error, and deleted the Azure Storage Account. |
+| **Symptom** | A local [`teardown.sh`](scripts/teardown.sh) script failed mid-execution due to a missing dynamic SSH key (`ephemeral_ssh_key.pub`), ignored the error, and deleted the Azure Storage Account. |
 | **Impact** | State was lost, leaving compute resources orphaned and generating unnecessary cloud costs. |
 | **Resolution** | Enforced fail-fast architecture (`set -e`) in bash scripts and implemented a dummy file workaround (`touch ephemeral_ssh_key.pub`) to satisfy Terraform's local plan requirements safely. |
 
@@ -122,25 +123,25 @@ Documentation of critical issues resolved during development, reflecting a matur
 |-------|--------|
 | **Symptom** | `terraform plan` hangs indefinitely at `Read complete after 0s`. |
 | **Diagnosis** | Azure subscription restrictions blocked auto-registration of non-essential Resource Providers. |
-| **Resolution** | Added `skip_provider_registration = true` to the `azurerm` provider block. Identified via debug: `TF_LOG=INFO terraform plan`. |
+| **Resolution** | Added `skip_provider_registration = true` to the `azurerm` provider block in [`providers.tf`](infra/providers.tf). Identified via debug: `TF_LOG=INFO terraform plan`. |
 
 ### 4. K3s Non-Root Access Isolation
 | Field | Detail |
 |-------|--------|
 | **Symptom** | The `devsecops` user cannot run `kubectl` (permission denied). |
 | **Diagnosis** | K3s creates `kubeconfig` with `0600` permissions (root-only) by default. |
-| **Resolution** | Injected `INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644"` during installation in Ansible. Enables non-root cluster auditing while maintaining secure defaults. |
+| **Resolution** | Injected `INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644"` during installation in [`ansible/k8s_setup.yml`](ansible/k8s_setup.yml). Enables non-root cluster auditing while maintaining secure defaults. |
 
 ### 5. Ansible Inventory Context Failure
 | Field | Detail |
 |-------|--------|
 | **Symptom** | `[WARNING]: No inventory was parsed, only implicit localhost is available`. |
-| **Diagnosis** | The `ansible-playbook` command did not reference `inventory.ini`, causing tasks to run on `localhost`. |
+| **Diagnosis** | The `ansible-playbook` command did not reference [`inventory.ini`](ansible/inventory.ini), causing tasks to run on `localhost`. |
 | **Resolution** | Standardized execution to always require explicit inventory: `ansible-playbook -i inventory.ini <playbook>`. |
 
 ---
 
-## 🛠️ Quickstart
+## Quickstart
 
 ### Prerequisites
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) ≥ 1.5 & [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html) ≥ 2.14
@@ -185,7 +186,7 @@ chmod +x scripts/teardown.sh
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 | Version | Status | Scope |
 |---------|--------|-------|
