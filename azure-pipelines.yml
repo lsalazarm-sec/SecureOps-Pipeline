@@ -1,31 +1,64 @@
+# ==============================================================================
 # azure-pipelines.yml
 # Purpose: CI/CD Pipeline for SecureOps Infrastructure using Terraform & OIDC
+# Architecture: Zero-Trust Identity (OIDC), Dynamic Backend State
+# ==============================================================================
 
 trigger:
-  - main
+  - main # Triggers the pipeline automatically on every push to the main branch
 
 pool:
-  vmImage: "ubuntu-latest"
+  vmImage: 'ubuntu-latest' # The Microsoft-hosted agent that will execute this pipeline
 
 variables:
-  # Replace with the exact name of your Service Connection
-  SERVICE_CONNECTION: "az-secureops-oidc-conn"
-  TF_VERSION: "1.9.4" #Pointing to the specific Terraform version we want
+  # OIDC Service Connection for secretless Azure authentication
+  SERVICE_CONNECTION: 'az-secureops-oidc-conn'
+  # Pinning Terraform version for immutable and predictable builds (SRE Best Practice)
+  TF_VERSION: '1.9.4' 
 
-steps:
-  - task: AzureCLI@2
-    displayName: "Terraform Initialize and Plan"
-    inputs:
-      azureSubscription: $(SERVICE_CONNECTION)
-      addSpnToEnvironment: true
-      scriptType: "bash"
-      scriptLocation: "inlineScript"
-      inlineScript: |
-        echo "=== 1. Navigating to Infrastructure Directory ==="
-        cd infra
+jobs:
+  # ============================================================================
+  # JOB: TerraformPlan
+  # Purpose: Prepares the environment, authenticates via OIDC, and evaluates IaC
+  # ============================================================================
+  - job: TerraformPlan
+    displayName: 'Evaluate and Plan Infrastructure'
+    steps:
+      
+      # ------------------------------------------------------------------------
+      # STEP 1: Toolchain Setup
+      # Description: Native agents might lack Terraform or have breaking versions.
+      # This bash step explicitly downloads and installs our pinned version.
+      # ------------------------------------------------------------------------
+      - bash: |
+          echo "=== Downloading Terraform v$(TF_VERSION) ==="
+          wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+          unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -version
+        displayName: 'Step 1: Install Terraform CLI'
 
-        echo "=== 2. Initializing Terraform with Dynamic Backend ==="
-        terraform init -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
+      # ------------------------------------------------------------------------
+      # STEP 2 / TASK: Authenticate and Execute IaC
+      # Description: Uses the AzureCLI@2 task to leverage OIDC federation.
+      # The 'addSpnToEnvironment' flag is critical: it injects a short-lived, 
+      # memory-only Entra ID token that Terraform consumes to access Azure.
+      # ------------------------------------------------------------------------
+      - task: AzureCLI@2
+        displayName: 'Step 2: Terraform Initialize and Plan'
+        inputs:
+          azureSubscription: $(SERVICE_CONNECTION)
+          addSpnToEnvironment: true # CRITICAL: Exposes ephemeral OIDC token
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            echo "=== 1. Navigating to Infrastructure Directory ==="
+            cd infra
 
-        echo "=== 3. Running Terraform Plan ==="
-        terraform plan -out=main.tfplan
+            echo "=== 2. Initializing Terraform with Dynamic Backend ==="
+            # Injects the Storage Account name dynamically from DevOps Secret Variables
+            terraform init -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
+
+            echo "=== 3. Running Terraform Plan ==="
+            # Creates an execution plan to preview changes before applying them
+            terraform plan -out=main.tfplan
