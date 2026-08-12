@@ -10,7 +10,7 @@
 ---
 - name: OS Baseline and Security Hardening
   hosts: k3s_nodes      # Targets the group defined in inventory.ini
-  become: yes           # Executes all tasks in this play with sudo privileges
+  become: true           # Executes all tasks in this play with sudo privileges
 
   tasks:
     # --------------------------------------------------------------------------
