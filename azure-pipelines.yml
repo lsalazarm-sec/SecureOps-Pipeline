@@ -5,7 +5,15 @@
 # ==============================================================================
 
 trigger:
-  - main # Automatically triggers the pipeline on code merges to the main branch
+  branches:
+    include:
+      - main
+  paths:
+    exclude:                 #Avoid unnecesary commits and Pipeline runs
+      - README.md
+      - docs/**
+      - scripts/**
+      - ansible/**
 
 pool:
   vmImage: "ubuntu-latest" # Uses an ephemeral, Microsoft-hosted Linux agent
