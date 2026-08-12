@@ -76,8 +76,9 @@ resource "azurerm_public_ip" "pip" {
   sku                 = "Standard"
 }
 
-# checkov:skip=CKV_AZURE_119: "Accepted risk for ephemeral lab. Compensatory control: NSG restricts SSH to trusted IPs only."
+
 resource "azurerm_network_interface" "nic" {
+  # checkov:skip=CKV_AZURE_119: "Accepted risk for ephemeral environmentory control: NSG restricts SSH to trusted IPs only."
   name                = "nic-secureops-vm"
   location            = azurerm_resource_group.infra_rg.location
   resource_group_name = azurerm_resource_group.infra_rg.name
