@@ -54,6 +54,9 @@ To ensure safe ephemeral operations, the infrastructure design strictly separate
 
 ## Repository Structure
 
+<img width="1536" height="1024" alt="Directories" src="https://github.com/user-attachments/assets/9276dceb-e040-436c-90ef-7de760e04ec3" />
+
+
 ```text
 SecureOps-Pipeline/
 ├── azure-pipelines.yml   # CI/CD Pipeline definition with Checkov SAST and Terraform
