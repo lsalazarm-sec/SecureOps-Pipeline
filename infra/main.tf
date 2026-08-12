@@ -102,7 +102,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   admin_ssh_key {
     username   = "devsecops"
-    public_key = file("~/.ssh/id_rsa.pub") 
+    public_key = file("ephemeral_ssh_key.pub") 
   }
 
   os_disk {
