@@ -9,7 +9,7 @@ pool:
 
 variables:
   # Replace with the exact name of your Service Connection
-  SERVICE_CONNECTION: "az-secureops-conn"
+  SERVICE_CONNECTION: "az-secureops-oidc-conn"
 
 steps:
   - task: AzureCLI@2
