@@ -124,9 +124,11 @@ Because this key is destroyed alongside the Microsoft-hosted agent, the server r
 
 
 ### Phase 3: Cloud Verification & Blast Radius Reduction
+
 A view of the Azure Portal demonstrating the architectural decoupling of our resources. 
 By splitting the persistent state (`tfstate` group) from the ephemeral compute (`infra` group), we contain the "blast radius." 
 The `infra` group can be safely destroyed daily to save costs without corrupting the pipeline's memory.
+
    <br>![Azure Resources Verified](docs/Gifs/08-azure-resources-verified.gif)
 ---
 
