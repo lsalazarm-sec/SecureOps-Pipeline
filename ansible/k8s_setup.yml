@@ -1,59 +1,69 @@
 # ==============================================================================
-# FILE: ansible/k8s_setup.yml
-# PURPOSE: Install and configure K3s lightweight Kubernetes with secure defaults.
+# FILE: ansible/playbook.yml
+# PURPOSE: Apply OS-level security baselines and network hardening.
 #
 # SRE CONTEXT:
-# Deploys the orchestration layer. It addresses the post-mortem incident by
-# ensuring the non-root user can interact with the cluster without compromising
-# overall security.
+# Before deploying applications, the underlying OS must be secured. This playbook
+# enforces a "Shift-Right" security posture by updating the system and closing
+# all unnecessary network ports using a local firewall (UFW).
 # ==============================================================================
 ---
-- name: Deploy Lightweight Kubernetes (K3s)
+- name: OS Baseline and Security Hardening
   hosts: k3s_nodes      # Targets the group defined in inventory.ini
-  become: yes           # Executes tasks requiring root (installation and services)
+  become: true          # Executes all tasks in this play with sudo privileges
 
   tasks:
     # --------------------------------------------------------------------------
-    # TASK 1: Idempotent K3s Installation & RBAC Fix
-    # Downloads and installs K3s.
-    # The 'write-kubeconfig-mode 644' flag solves the incident where the devsecops
-    # user was denied access to kubectl. It grants read access to the config file.
+    # TASK 1: Patch Management
+    # Ensures the system is running the latest security patches.
     # --------------------------------------------------------------------------
-    - name: Download and install K3s (with non-root access mode)
-      shell: >
-        curl -sfL https://get.k3s.io | 
-        INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" sh -
-      args:
-        creates: /usr/local/bin/k3s # IDEMPOTENCY: Skips execution if this file exists
+    - name: Update and upgrade apt packages
+      ansible.builtin.apt:
+        upgrade: true
+        update_cache: true
+        cache_valid_time: 86400 # Caches the update for 24 hours to speed up re-runs
 
     # --------------------------------------------------------------------------
-    # TASK 2: Service Reliability
-    # Ensures the Kubernetes service survives VM reboots and crashes.
+    # TASK 2: Core Dependencies
+    # Installs mandatory tools for networking and package management.
     # --------------------------------------------------------------------------
-    - name: Verify K3s service is active and running
-      systemd:
-        name: k3s
-        state: started
-        enabled: yes
+    - name: Install baseline dependencies
+      ansible.builtin.apt:
+        name:
+          - curl                        # Required to download the K3s installation script
+          - apt-transport-https         # Ensures secure package downloads
+          - ufw                         # Uncomplicated Firewall for local network hardening
+          - software-properties-common  # Provides common package management scripts
+        state: present
 
     # --------------------------------------------------------------------------
-    # TASK 3: Health Check & Verification Loop
-    # K3s takes a few seconds to initialize. Instead of failing immediately,
-    # Ansible will poll the API every 10 seconds (up to 5 times) until it gets
-    # a successful response (return code 0).
+    # TASK 3: Network Hardening (Default Deny)
+    # Implements a strict firewall policy. If traffic is not explicitly allowed,
+    # it is dropped. This mitigates unauthorized port scanning.
     # --------------------------------------------------------------------------
-    - name: Wait for Kubernetes node to become ready
-      command: k3s kubectl get nodes
-      register: k3s_status      # Captures the output of the command
-      retries: 5                # Try up to 5 times
-      delay: 10                 # Wait 10 seconds between tries
-      until: k3s_status.rc == 0 # Stop retrying when return code is 0 (Success)
+    - name: Configure UFW (Uncomplicated Firewall) - Deny all incoming by default
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
 
     # --------------------------------------------------------------------------
-    # TASK 4: Display Output
-    # Prints the result of the previous 'get nodes' command to the terminal
-    # so the engineer can visually verify the node is 'Ready'.
+    # TASK 4: Network Hardening (Allow SSH)
+    # Essential for Ansible and administrator access. Without this, we would lock
+    # ourselves out of the VM.
     # --------------------------------------------------------------------------
-    - name: Display cluster status
-      debug:
-        var: k3s_status.stdout_lines
+    - name: UFW - Allow SSH (Port 22)
+      community.general.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    # --------------------------------------------------------------------------
+    # TASK 5: Network Hardening (Allow Kubernetes API)
+    # Essential for kubectl commands to communicate with the K3s cluster.
+    # --------------------------------------------------------------------------
+    - name: UFW - Allow K3s API Server (Port 6443)
+      community.general.ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
