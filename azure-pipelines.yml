@@ -1,14 +1,14 @@
 # ==============================================================================
 # azure-pipelines.yml
-# Purpose: CI/CD Pipeline for SecureOps Infrastructure using Terraform & OIDC
-# Architecture: Zero-Trust Identity (OIDC), Dynamic Backend State
+# Purpose: Enterprise-grade CI/CD Pipeline for SecureOps Infrastructure
+# Architecture: Zero-Trust Identity (OIDC), Dynamic Backend State, SAST Gates
 # ==============================================================================
 
 trigger:
-  - main # Triggers the pipeline automatically on every push to the main branch
+  - main # Automatically triggers the pipeline on code merges to the main branch
 
 pool:
-  vmImage: "ubuntu-latest" # The Microsoft-hosted agent that will execute this pipeline
+  vmImage: "ubuntu-latest" # Uses an ephemeral, Microsoft-hosted Linux agent
 
 variables:
   # OIDC Service Connection for secretless Azure authentication
@@ -18,19 +18,17 @@ variables:
 
 jobs:
   # ============================================================================
-  # JOB: TerraformPlan
-  # Purpose: Prepares the environment, authenticates via OIDC, and evaluates IaC
+  # JOB: TerraformDeploy
+  # Purpose: Audits code for security risks, plans, and deploys infrastructure
   # ============================================================================
-  - job: TerraformPlan
-    displayName: "Evaluate and Plan Infrastructure"
+  - job: TerraformDeploy
+    displayName: "Secure CI/CD Deployment"
     steps:
       # ------------------------------------------------------------------------
       # STEP 1: Toolchain Setup
-      # ------------------------------------------------------------------------
-
       # Description: Native agents might lack Terraform or have breaking versions.
       # This bash step explicitly downloads and installs our pinned version.
-
+      # ------------------------------------------------------------------------
       - bash: |
           echo "=== Downloading Terraform v$(TF_VERSION) ==="
           wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
@@ -40,13 +38,10 @@ jobs:
         displayName: "Step 1: Install Terraform CLI"
 
       # ------------------------------------------------------------------------
-      # STEP 2 / TASK: Authenticate and Execute IaC
-      #          SECURITY GATE: Static Application Security Testing (SAST)
-      # ------------------------------------------------------------------------
-
+      # STEP 2: SAST Security Gate (Shift-Left)
       # Description: Checkov scans the IaC files for security misconfigurations.
       # If a critical vulnerability is found, the pipeline FAILS and BLOCKS deployment.
-
+      # ------------------------------------------------------------------------
       - bash: |
           echo "=== 1. Installing Checkov ==="
           pip install checkov --quiet
@@ -55,18 +50,21 @@ jobs:
           checkov -d infra/
         displayName: "Step 2: SAST Security Gate (Checkov)"
 
-      #Description: Uses the AzureCLI@2 task to leverage OIDC federation.
-      # The 'addSpnToEnvironment' flag is critical: it injects a short-lived,
-      # memory-only Entra ID token that Terraform consumes to access Azure.
+      # ------------------------------------------------------------------------
+      # STEP 3: Authenticate, Plan, and Deploy
+      # Description: Uses OIDC to securely log into Azure. Generates ephemeral
+      # SSH keys, initializes the dynamic backend, and executes the deployment.
+      # ------------------------------------------------------------------------
       - task: AzureCLI@2
-        displayName: "Step 2: Terraform Initialize and Plan"
+        displayName: "Step 3: Terraform Init, Plan and Apply"
         inputs:
           azureSubscription: $(SERVICE_CONNECTION)
-          addSpnToEnvironment: true #  CRITICAL: Exposes ephemeral OIDC token
+          addSpnToEnvironment: true #  CRITICAL: Exposes ephemeral OIDC token to the agent
           scriptType: "bash"
           scriptLocation: "inlineScript"
           inlineScript: |
             echo "=== 0. Mapping OIDC Tokens to Terraform ==="
+            # Connecting Azure DevOps ephemeral variables to Terraform ARM_ environment variables
             export ARM_USE_OIDC=true
             export ARM_OIDC_TOKEN=$idToken
             export ARM_CLIENT_ID=$servicePrincipalId
@@ -77,10 +75,17 @@ jobs:
             cd infra
 
             echo "=== 1.5 Generating Ephemeral SSH Key ==="
+            # SRE Practice: Automatically generate a disposable SSH key for the pipeline agent
             ssh-keygen -t rsa -b 4096 -f ephemeral_ssh_key -q -N ""
 
             echo "=== 2. Initializing Terraform with Dynamic Backend ==="
+            # Injects the Storage Account name dynamically from DevOps Secret Variables
             terraform init -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
 
             echo "=== 3. Running Terraform Plan ==="
+            # Creates a strict execution plan to preview changes before applying them
             terraform plan -out=main.tfplan
+
+            echo "=== 4. Executing Terraform Apply ==="
+            # SRE Practice: Auto-approve using ONLY the strictly audited plan
+            terraform apply -auto-approve main.tfplan
