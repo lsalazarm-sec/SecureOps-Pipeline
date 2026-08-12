@@ -74,29 +74,50 @@ SecureOps-Pipeline/
 
 ---
 
-## The DevSecOps Lifecycle (In Action)
+## 🎥 The DevSecOps Lifecycle (In Action)
 
-### Phase 1: Environment Setup & Zero-Trust
-1. **Bootstrapping the Backend:** The [`scripts/bootstrap.sh`](scripts/bootstrap.sh) bash script provisions a zero-cost Azure Storage Account (`tfstate`).
+This section demonstrates the pipeline's operational maturity, highlighting how security, cost-efficiency (FinOps), and state management are embedded directly into the CI/CD workflow.
+
+### Phase 1: Environment Setup & Zero-Trust Identity
+
+Before any compute resources are provisioned, the foundational architecture must enforce secure state management and secretless authentication.
+
+1. **Bootstrapping the Backend (FinOps & State Lock):** The [`scripts/bootstrap.sh`](scripts/bootstrap.sh) bash script provisions a zero-cost Azure Storage Account (`tfstate`). This isolated environment ensures state locking (preventing race conditions during concurrent pipeline runs) and decouples the state from the ephemeral compute layer.
+
    <br>![Bootstrap Run](docs/Gifs/bootstrap-run.gif)
-2. **OIDC Federation Setup:** Configuring Workload Identity Federation in Azure DevOps.
+
+2. **OIDC Federation Setup (Secretless Auth):** Configuring Workload Identity Federation in Azure DevOps. By establishing a trust relationship between Azure DevOps and Microsoft Entra ID, we completely eliminate the need for long-lived client secrets, drastically reducing the risk of credential leakage.
+
    <br>![OIDC Setup](docs/Gifs/03-oidc-federation-setup.gif)
-3. **Pipeline Variables:** Injecting the dynamic Storage Account name into Azure DevOps.
+
+3. **Pipeline Variables (Dynamic Injection):** Injecting the dynamically generated Storage Account name into the pipeline. This ensures the CI/CD environment dynamically resolves its backend dependencies without hardcoding sensitive infrastructure details.
+
    <br>![Pipeline Vars](docs/Gifs/04a-pipeline-setup-and-vars.gif)
 
-### Phase 2: Shift-Left & Deployment
-1. **OIDC Execution:** The agent requests a short-lived token and authenticates securely.
+### Phase 2: Shift-Left Security & Immutable Deployment
+This phase proves the implementation of "Shift-Left" security: catching vulnerabilities in the code repository before they ever reach the cloud provider.
+
+1. **OIDC Execution (Ephemeral Tokens):** The pipeline agent requests a short-lived, ephemeral access token from Azure AD to authenticate. Once the job finishes, the token expires, leaving zero lingering access.
+
    <br>![OIDC Execution](docs/Gifs/04b-pipeline-execution-oidc.gif)
-2. **Shift-Left Security Gate (Blocked):** Checkov SAST intercepts insecure code (e.g., exposed public IP) in [`main.tf`](infra/main.tf) and halts execution.
+
+2. **Shift-Left Security Gate (Compliance Enforcement):** Checkov SAST intercepts the deployment. In this scenario, it detects an insecure configuration (e.g., an exposed public IP without restricted NSG rules) in [`main.tf`](infra/main.tf). The pipeline acts as a strict gatekeeper and immediately halts execution to prevent a vulnerable deployment.
+
    <br>![Security Gate Block](docs/Gifs/05-security-gate-block.gif)
-3. **Risk Acceptance (Passed):** After mitigating vulnerabilities and adding `checkov:skip` compensatory controls, the gate passes.
+
+3. **Risk Acceptance (Auditability):** Security is about managed risk. After mitigating the vulnerabilities and documenting a strict `checkov:skip` annotation with a compensatory control directly in the IaC, the security gate passes. This practice ensures all security exceptions are version-controlled and auditable.
+
    <br>![Security Gate Passed](docs/Gifs/06-security-gate-passed.gif)
-4. **Ephemeral Deployment:** Infrastructure is provisioned automatically via [`azure-pipelines.yml`](azure-pipelines.yml) with dynamic SSH keys.
+
+4. **Ephemeral Deployment (Immutable Infra):** Infrastructure is provisioned automatically via [`azure-pipelines.yml`](azure-pipelines.yml). The pipeline injects a dynamically generated SSH key into the VM. Because this key is destroyed alongside the Microsoft-hosted agent, the server remains completely immutable and protected against unauthorized lateral movement.
+
    <br>![Terraform Apply](docs/Gifs/07-terraform-apply-success.gif)
 
-### Phase 3: Cloud Verification
-A view of the Azure Portal demonstrating the architectural decoupling of the persistent state (`tfstate`) and ephemeral compute (`infra`).
-<br>![Azure Resources Verified](docs/Gifs/08-azure-resources-verified.gif)
+### Phase 3: Cloud Verification & Blast Radius Reduction
+
+A view of the Azure Portal demonstrating the architectural decoupling of our resources. By splitting the persistent state (`tfstate` group) from the ephemeral compute (`infra` group), we contain the "blast radius." The `infra` group can be safely destroyed daily to save costs without corrupting the pipeline's memory.
+
+    <br>![Azure Resources Verified](docs/Gifs/08-azure-resources-verified.gif)
 
 ---
 
