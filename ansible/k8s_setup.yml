@@ -1,36 +1,59 @@
-# ansible/k8s_setup.yml
-# K3s Installation
-
-- name: Install and Configure K3s (Lightweight Kubernetes)
-  hosts: devsecops_vm
-  become: yes # Run tasks with root privileges
+# ==============================================================================
+# FILE: ansible/k8s_setup.yml
+# PURPOSE: Install and configure K3s lightweight Kubernetes with secure defaults.
+#
+# SRE CONTEXT:
+# Deploys the orchestration layer. It addresses the post-mortem incident by
+# ensuring the non-root user can interact with the cluster without compromising
+# overall security.
+# ==============================================================================
+---
+- name: Deploy Lightweight Kubernetes (K3s)
+  hosts: k3s_nodes      # Targets the group defined in inventory.ini
+  become: yes           # Executes tasks requiring root (installation and services)
 
   tasks:
-    - name: Download K3s installation script
-      ansible.builtin.get_url:
-        url: https://get.k3s.io
-        dest: /tmp/k3s_install.sh
-        mode: "0755"
+    # --------------------------------------------------------------------------
+    # TASK 1: Idempotent K3s Installation & RBAC Fix
+    # Downloads and installs K3s.
+    # The 'write-kubeconfig-mode 644' flag solves the incident where the devsecops
+    # user was denied access to kubectl. It grants read access to the config file.
+    # --------------------------------------------------------------------------
+    - name: Download and install K3s (with non-root access mode)
+      shell: >
+        curl -sfL https://get.k3s.io | 
+        INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" sh -
+      args:
+        creates: /usr/local/bin/k3s # IDEMPOTENCY: Skips execution if this file exists
 
-    - name: Execute K3s installation script
-      ansible.builtin.command: /tmp/k3s_install.sh
-      environment:
-        # Allows the devsecops user to read the kubeconfig file
-        INSTALL_K3S_EXEC: "server --write-kubeconfig-mode 644"
-      register: k3s_install
-      changed_when: "'No change' not in k3s_install.stdout"
-
-    - name: Ensure K3s service is running and enabled
-      ansible.builtin.systemd:
+    # --------------------------------------------------------------------------
+    # TASK 2: Service Reliability
+    # Ensures the Kubernetes service survives VM reboots and crashes.
+    # --------------------------------------------------------------------------
+    - name: Verify K3s service is active and running
+      systemd:
         name: k3s
         state: started
         enabled: yes
 
-    - name: Verify Kubernetes node is ready
-      ansible.builtin.command: k3s kubectl get nodes
-      register: k3s_nodes
-      changed_when: false
+    # --------------------------------------------------------------------------
+    # TASK 3: Health Check & Verification Loop
+    # K3s takes a few seconds to initialize. Instead of failing immediately,
+    # Ansible will poll the API every 10 seconds (up to 5 times) until it gets
+    # a successful response (return code 0).
+    # --------------------------------------------------------------------------
+    - name: Wait for Kubernetes node to become ready
+      command: k3s kubectl get nodes
+      register: k3s_status      # Captures the output of the command
+      retries: 5                # Try up to 5 times
+      delay: 10                 # Wait 10 seconds between tries
+      until: k3s_status.rc == 0 # Stop retrying when return code is 0 (Success)
 
-    - name: Display K3s node status
-      ansible.builtin.debug:
-        var: k3s_nodes.stdout_lines
+    # --------------------------------------------------------------------------
+    # TASK 4: Display Output
+    # Prints the result of the previous 'get nodes' command to the terminal
+    # so the engineer can visually verify the node is 'Ready'.
+    # --------------------------------------------------------------------------
+    - name: Display cluster status
+      debug:
+        var: k3s_status.stdout_lines

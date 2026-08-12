@@ -1,21 +1,69 @@
-# ansible/playbook.yml
-# Baseline Configuration
-
-- name: Baseline Configuration for DevSecOps VM
-  hosts: devsecops_vm
-  become: yes # This allows Ansible to run commands with sudo
+# ==============================================================================
+# FILE: ansible/playbook.yml
+# PURPOSE: Apply OS-level security baselines and network hardening.
+#
+# SRE CONTEXT:
+# Before deploying applications, the underlying OS must be secured. This playbook
+# enforces a "Shift-Right" security posture by updating the system and closing
+# all unnecessary network ports using a local firewall (UFW).
+# ==============================================================================
+---
+- name: OS Baseline and Security Hardening
+  hosts: k3s_nodes      # Targets the group defined in inventory.ini
+  become: yes           # Executes all tasks in this play with sudo privileges
 
   tasks:
-    - name: Ping the server to verify connectivity
-      ansible.builtin.ping:
-
-    - name: Update APT cache and install basic prerequisite packages
-      ansible.builtin.apt:
-        name:
-          - curl
-          - git
-          - apt-transport-https
-          - ca-certificates
-          - software-properties-common
-        state: present
+    # --------------------------------------------------------------------------
+    # TASK 1: Patch Management
+    # Ensures the system is running the latest security patches.
+    # --------------------------------------------------------------------------
+    - name: Update and upgrade apt packages
+      apt:
+        upgrade: yes
         update_cache: yes
+        cache_valid_time: 86400 # Caches the update for 24 hours to speed up re-runs
+
+    # --------------------------------------------------------------------------
+    # TASK 2: Core Dependencies
+    # Installs mandatory tools for networking and package management.
+    # --------------------------------------------------------------------------
+    - name: Install baseline dependencies
+      apt:
+        name:
+          - curl                        # Required to download the K3s installation script
+          - apt-transport-https         # Ensures secure package downloads
+          - ufw                         # Uncomplicated Firewall for local network hardening
+          - software-properties-common  # Provides common package management scripts
+        state: present
+
+    # --------------------------------------------------------------------------
+    # TASK 3: Network Hardening (Default Deny)
+    # Implements a strict firewall policy. If traffic is not explicitly allowed,
+    # it is dropped. This mitigates unauthorized port scanning.
+    # --------------------------------------------------------------------------
+    - name: Configure UFW (Uncomplicated Firewall) - Deny all incoming by default
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    # --------------------------------------------------------------------------
+    # TASK 4: Network Hardening (Allow SSH)
+    # Essential for Ansible and administrator access. Without this, we would lock
+    # ourselves out of the VM.
+    # --------------------------------------------------------------------------
+    - name: UFW - Allow SSH (Port 22)
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    # --------------------------------------------------------------------------
+    # TASK 5: Network Hardening (Allow Kubernetes API)
+    # Essential for kubectl commands to communicate with the K3s cluster.
+    # --------------------------------------------------------------------------
+    - name: UFW - Allow K3s API Server (Port 6443)
+      ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
