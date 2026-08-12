@@ -48,7 +48,7 @@ jobs:
         displayName: 'Step 2: Terraform Initialize and Plan'
         inputs:
           azureSubscription: $(SERVICE_CONNECTION)
-          addSpnToEnvironment: true # CRITICAL: Exposes ephemeral OIDC token
+          addSpnToEnvironment: true #  CRITICAL: Exposes ephemeral OIDC token
           scriptType: 'bash'
           scriptLocation: 'inlineScript'
           inlineScript: |
