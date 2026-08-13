@@ -129,28 +129,33 @@ jobs:
       # Description: Extracts the dynamic IP from Terraform outputs, bypasses
       # strict host key checking for the ephemeral VM, and executes the playbook.
       # ------------------------------------------------------------------------
-      - bash: |
-          echo "=== 1. Extracting Dynamic IP from Terraform ==="
-          cd infra
-          # Extract the raw IP address outputted by Terraform
-          export VM_IP=$(terraform output -raw vm_public_ip)
-          echo "Target VM IP identified as: $VM_IP"
-
-          echo "=== 2. Configuring Ansible Environment ==="
-          cd ../ansible
-
-          # SRE Practice: Disable StrictHostKeyChecking for ephemeral infrastructure
-          # since the agent has never seen this new VM's SSH fingerprint before.
-          export ANSIBLE_HOST_KEY_CHECKING=False
-
-          echo "=== 3. Executing K3s Deployment Playbook ==="
-          # Create an ephemeral inventory file on the fly to match the [k3s_nodes] group in playbook.yml
-          echo -e "[k3s_nodes]\n$VM_IP" > dynamic_inv.ini
-
-          # Execute Ansible using the ephemeral inventory file
-          ansible-playbook -i dynamic_inv.ini -u devsecops --private-key ../infra/ephemeral_ssh_key playbook.yml
-
+      - task: AzureCLI@2
         displayName: "Step 4: Ansible Configuration & K3s Hardening"
+        inputs:
+          azureSubscription: $(SERVICE_CONNECTION)
+          addSpnToEnvironment: true # CRITICAL: Exposes ephemeral OIDC token to the agent
+          scriptType: "bash"
+          scriptLocation: "inlineScript"
+          inlineScript: |
+            echo "=== 0. Mapping OIDC Tokens to Terraform ==="
+            export ARM_USE_OIDC=true
+            export ARM_OIDC_TOKEN=$idToken
+            export ARM_CLIENT_ID=$servicePrincipalId
+            export ARM_TENANT_ID=$tenantId
+            export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+            echo "=== 1. Extracting Dynamic IP from Terraform ==="
+            cd infra
+            export VM_IP=$(terraform output -raw vm_public_ip)
+            echo "Target VM IP identified as: $VM_IP"
+
+            echo "=== 2. Configuring Ansible Environment ==="
+            cd ../ansible
+            export ANSIBLE_HOST_KEY_CHECKING=False
+
+            echo "=== 3. Executing K3s Deployment Playbook ==="
+            echo -e "[k3s_nodes]\n$VM_IP" > dynamic_inv.ini
+            ansible-playbook -i dynamic_inv.ini -u devsecops --private-key ../infra/ephemeral_ssh_key playbook.yml
 
       # ------------------------------------------------------------------------
       # STEP 5: Publish Kubeconfig Artifact

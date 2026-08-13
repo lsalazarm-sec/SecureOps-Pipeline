@@ -67,3 +67,5 @@
         rule: allow
         port: '6443'
         proto: tcp
+        
+- import_playbook: k8s_setup.yml
