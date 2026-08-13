@@ -108,7 +108,9 @@ jobs:
             echo "=== 2. Initializing Terraform with Dynamic Backend ==="
             terraform init \
               -backend-config="resource_group_name=$(BACKEND_RG_NAME)" \
-              -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
+              -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)" \
+              -backend-config="use_oidc=true" \
+              -backend-config="use_azuread_auth=true"
 
             # Injects the Storage Account name dynamically from DevOps Secret Variables
 
