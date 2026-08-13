@@ -1,14 +1,8 @@
 # infra/main.tf
 # Purpose: Provision the baseline network, firewall (NSG), and VM for the DevSecOps lab.
 
-# 1. Fetch Local Public IP dynamically
-data "http" "myip" {
-  url = "http://ipv4.icanhazip.com"
-}
-
-locals {
-  admin_ip = "${chomp(data.http.myip.response_body)}/32"
-}
+# 1. Fetch Local Public IP dynamically --> The IP will be assigned to the respective variable in variables.tf. 
+#This ensures that only the current execution environment can connect to the VM.
 
 # 2. Resource Group for the Infrastructure
 resource "azurerm_resource_group" "infra_rg" {
@@ -45,7 +39,7 @@ resource "azurerm_network_security_group" "nsg" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "201.198.177.35"
+    source_address_prefix      = "${var.admin_ip}/32"
     destination_address_prefix = "*"
   }
 
@@ -57,7 +51,7 @@ resource "azurerm_network_security_group" "nsg" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "6443"
-    source_address_prefix      = local.admin_ip
+    source_address_prefix      = "${var.admin_ip}/32"
     destination_address_prefix = "*"
   }
 }
@@ -108,7 +102,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   admin_ssh_key {
     username   = "devsecops"
-    public_key = file("ephemeral_ssh_key.pub") 
+    public_key = var.admin_ssh_public_key 
   }
 
   os_disk {
