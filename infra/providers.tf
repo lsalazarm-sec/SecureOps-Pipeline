@@ -21,7 +21,6 @@ terraform {
   # dynamically by the CI/CD pipeline via -backend-config.
   # ============================================================================
   backend "azurerm" {
-    resource_group_name  = "rg-secureops-state" # Update this to match your bootstrap RG name
     container_name       = "tfstate"
     key                  = "terraform.tfstate"
   }
