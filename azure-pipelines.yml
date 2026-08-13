@@ -74,7 +74,6 @@ jobs:
           scriptLocation: "inlineScript"
           inlineScript: |
             echo "=== 0. Mapping OIDC Tokens to Terraform ==="
-            # Connecting Azure DevOps ephemeral variables to Terraform ARM_ environment variables
             export ARM_USE_OIDC=true
             export ARM_OIDC_TOKEN=$idToken
             export ARM_CLIENT_ID=$servicePrincipalId
@@ -85,21 +84,8 @@ jobs:
             cd infra
 
             echo "=== 1.5 Extracting Dynamic Context for Zero-Touch Provisioning ==="
-
-            # FinOps & Security Practice: Generate an ephemeral ed25519 SSH key.
-            # Transitioned to ed25519 for stronger cryptography and smaller payload footprint.
-
             ssh-keygen -t ed25519 -f ephemeral_ssh_key -q -N ""
-
-            # INJECTION 1: Read the public key into memory and expose it to Terraform.
-            # This completely removes the reliance on local file("...") reads in main.tf,
-            # preventing environment drift and local teardown failures.
-
             export TF_VAR_admin_ssh_public_key=$(cat ephemeral_ssh_key.pub)
-
-            # INJECTION 2: Fetch the dynamic public IP of this Microsoft-hosted agent.
-            # This allows the Azure Network Security Group (NSG) to strictly whitelist 
-            # only the pipeline runner, enforcing a true Zero-Trust firewall architecture.
 
             export AGENT_IP=$(curl -s https://api.ipify.org)
             echo "Pipeline Agent Public IP identified as: $AGENT_IP"
@@ -113,15 +99,15 @@ jobs:
               -backend-config="use_azuread_auth=true"
 
             echo "=== 3. Running Terraform Plan ==="
-
-            # Creates a strict execution plan. Terraform will automatically consume 
-            # TF_VAR_admin_ssh_public_key and TF_VAR_admin_ip from the runner's memory.
-
             terraform plan -out=main.tfplan
 
-            echo "=== 4. Executing Terraform Apply ==="
+            echo "=== 3.5. Security Scanning (Checkov Shift-Left) ==="
+            # SRE Practice: Fail the pipeline immediately if Checkov detects critical IaC vulnerabilities.
+            pip install checkov --quiet
+            echo "[+] Running Checkov against Terraform definitions..."
+            checkov -d . --framework terraform
 
-            # SRE Practice: Auto-approve using ONLY the strictly audited plan
+            echo "=== 4. Executing Terraform Apply ==="
             terraform apply -auto-approve main.tfplan
 
       # ------------------------------------------------------------------------
