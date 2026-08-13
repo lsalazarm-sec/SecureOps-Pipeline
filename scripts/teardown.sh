@@ -65,7 +65,7 @@ cd "$(dirname "$0")/../infra"
 
 echo ""
 echo "[3/5] Connecting to remote state backend..."
-terraform init -reconfigure -backend-config="storage_account_name=$STORAGE_ACCOUNT_NAME"
+terraform init -upgrade -reconfigure -backend-config="storage_account_name=$STORAGE_ACCOUNT_NAME"
 
 # ------------------------------------------------------------------------------
 # STEP 4: Safe Infrastructure Destruction (The Muscle)
