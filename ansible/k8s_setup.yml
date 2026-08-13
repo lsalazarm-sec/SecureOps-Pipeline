@@ -67,3 +67,13 @@
         rule: allow
         port: '6443'
         proto: tcp
+
+    # --------------------------------------------------------------------------
+    # TASK 6: Fetch Kubeconfig for Local Access
+    # Extracts the cluster credentials to download them from Azure DevOps
+    # --------------------------------------------------------------------------
+    - name: Fetch Kubeconfig to Azure DevOps workspace
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: ../infra/k3s.yaml
+        flat: true
