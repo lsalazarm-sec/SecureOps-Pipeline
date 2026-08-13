@@ -119,7 +119,7 @@ jobs:
         displayName: "Step 4: Ansible Configuration & K3s Hardening"
         inputs:
           azureSubscription: $(SERVICE_CONNECTION)
-          addSpnToEnvironment: true # CRITICAL: Exposes ephemeral OIDC token to the agent
+          addSpnToEnvironment: true
           scriptType: "bash"
           scriptLocation: "inlineScript"
           inlineScript: |
@@ -139,9 +139,9 @@ jobs:
             cd ../ansible
             export ANSIBLE_HOST_KEY_CHECKING=False
 
-            echo "=== 3. Executing K3s Deployment Playbook ==="
+            echo "=== 3. Executing Master Playbook ==="
             echo -e "[k3s_nodes]\n$VM_IP" > dynamic_inv.ini
-            ansible-playbook -i dynamic_inv.ini -u devsecops --private-key ../infra/ephemeral_ssh_key playbook.yml
+            ansible-playbook -i dynamic_inv.ini -u devsecops --private-key ../infra/ephemeral_ssh_key main.yml
 
       # ------------------------------------------------------------------------
       # STEP 5: Publish Kubeconfig Artifact

@@ -1,0 +1,33 @@
+# ==============================================================================
+# ansible/wazuh.yml
+# ==============================================================================
+- name: Configure Wazuh Agent
+  hosts: all
+  become: true
+  vars:
+    # Dummy IP. Service is stopped until the central Manager is deployed.
+    wazuh_manager_ip: "127.0.0.1" 
+  tasks:
+    - name: Download Wazuh repository GPG key
+      ansible.builtin.get_url:
+        url: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+        dest: /usr/share/keyrings/wazuh.asc
+
+    - name: Add Wazuh repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/wazuh.asc] https://packages.wazuh.com/4.x/apt/ stable main"
+        state: present
+        update_cache: true
+
+    - name: Install Wazuh Agent
+      ansible.builtin.apt:
+        name: wazuh-agent
+        state: present
+      environment:
+        WAZUH_MANAGER: "{{ wazuh_manager_ip }}"
+
+    - name: Disable Wazuh Agent service temporarily (Awaiting Manager)
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        enabled: false
+        state: stopped

@@ -1,0 +1,8 @@
+# ==============================================================================
+# ansible/main.yml
+# Purpose: Master playbook to orchestrate all configuration tasks sequentially.
+# Create this file to avoid running multiple ansible-playbook commands.
+# ==============================================================================
+
+- import_playbook: k8s_setup.yml
+- import_playbook: wazuh.yml
