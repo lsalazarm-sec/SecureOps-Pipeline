@@ -144,8 +144,10 @@ jobs:
           export ANSIBLE_HOST_KEY_CHECKING=False
 
           echo "=== 3. Executing K3s Deployment Playbook ==="
-          # Execute Ansible using the dynamic IP as an in-memory inventory list (note the comma).
-          # We point it to the ephemeral SSH key generated in Step 3.
-          # IMPORTANT: Update 'adminuser' if your Terraform provisions a different SSH username.
-          ansible-playbook -i "$VM_IP," -u adminuser --private-key ../infra/ephemeral_ssh_key playbook.yml
+          # Create an ephemeral inventory file on the fly to match the [k3s_nodes] group in playbook.yml
+          echo -e "[k3s_nodes]\n$VM_IP" > dynamic_inv.ini
+
+          # Execute Ansible using the ephemeral inventory file
+          ansible-playbook -i dynamic_inv.ini -u devsecops --private-key ../infra/ephemeral_ssh_key playbook.yml
+
         displayName: "Step 4: Ansible Configuration & K3s Hardening"
