@@ -9,7 +9,7 @@ trigger:
     include:
       - main
   paths:
-    exclude:                 #Avoid unnecesary commits and Pipeline runs
+    exclude: #Avoid unnecesary commits and Pipeline runs
       - README.md
       - docs/**
       - scripts/**
@@ -59,15 +59,17 @@ jobs:
         displayName: "Step 2: SAST Security Gate (Checkov)"
 
       # ------------------------------------------------------------------------
-      # STEP 3: Authenticate, Plan, and Deploy
+      # STEP 3: Authenticate, Plan, and Deploy (Zero-Touch Implementation)
       # Description: Uses OIDC to securely log into Azure. Generates ephemeral
-      # SSH keys, initializes the dynamic backend, and executes the deployment.
+      # SSH keys and fetches the agent's dynamic IP, injecting both directly
+      # into Terraform's memory via TF_VAR_ environment variables. This eliminates
+      # all hardcoded values and local file dependencies.
       # ------------------------------------------------------------------------
       - task: AzureCLI@2
-        displayName: "Step 3: Terraform Init, Plan and Apply"
+        displayName: "Step 3: Terraform Init, Plan and Apply (Zero-Touch)"
         inputs:
           azureSubscription: $(SERVICE_CONNECTION)
-          addSpnToEnvironment: true #  CRITICAL: Exposes ephemeral OIDC token to the agent
+          addSpnToEnvironment: true # CRITICAL: Exposes ephemeral OIDC token to the agent
           scriptType: "bash"
           scriptLocation: "inlineScript"
           inlineScript: |
@@ -82,18 +84,41 @@ jobs:
             echo "=== 1. Navigating to Infrastructure Directory ==="
             cd infra
 
-            echo "=== 1.5 Generating Ephemeral SSH Key ==="
-            # SRE Practice: Automatically generate a disposable SSH key for the pipeline agent
-            ssh-keygen -t rsa -b 4096 -f ephemeral_ssh_key -q -N ""
+            echo "=== 1.5 Extracting Dynamic Context for Zero-Touch Provisioning ==="
+
+            # FinOps & Security Practice: Generate an ephemeral ed25519 SSH key.
+            # Transitioned to ed25519 for stronger cryptography and smaller payload footprint.
+
+            ssh-keygen -t ed25519 -f ephemeral_ssh_key -q -N ""
+
+            # INJECTION 1: Read the public key into memory and expose it to Terraform.
+            # This completely removes the reliance on local file("...") reads in main.tf,
+            # preventing environment drift and local teardown failures.
+
+            export TF_VAR_admin_ssh_public_key=$(cat ephemeral_ssh_key.pub)
+
+            # INJECTION 2: Fetch the dynamic public IP of this Microsoft-hosted agent.
+            # This allows the Azure Network Security Group (NSG) to strictly whitelist 
+            # only the pipeline runner, enforcing a true Zero-Trust firewall architecture.
+
+            export AGENT_IP=$(curl -s https://api.ipify.org)
+            echo "Pipeline Agent Public IP identified as: $AGENT_IP"
+            export TF_VAR_admin_ip=$AGENT_IP
 
             echo "=== 2. Initializing Terraform with Dynamic Backend ==="
+
             # Injects the Storage Account name dynamically from DevOps Secret Variables
+
             terraform init -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
 
             echo "=== 3. Running Terraform Plan ==="
-            # Creates a strict execution plan to preview changes before applying them
+
+            # Creates a strict execution plan. Terraform will automatically consume 
+            # TF_VAR_admin_ssh_public_key and TF_VAR_admin_ip from the runner's memory.
+
             terraform plan -out=main.tfplan
 
             echo "=== 4. Executing Terraform Apply ==="
+
             # SRE Practice: Auto-approve using ONLY the strictly audited plan
             terraform apply -auto-approve main.tfplan
