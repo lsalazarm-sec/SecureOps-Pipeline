@@ -69,25 +69,25 @@ terraform init -upgrade -reconfigure -backend-config="storage_account_name=$STOR
 
 # ------------------------------------------------------------------------------
 # STEP 4: Safe Infrastructure Destruction (The Muscle)
-# Here we mitigate the "Orphaned Infrastructure" incident. We create a dummy SSH
+# Here we mitigate the "Orphaned Infrastructure" incident. We create a valid dummy SSH
 # key so Terraform can successfully evaluate the state without crashing locally.
 # ------------------------------------------------------------------------------
 echo ""
 echo "[4/5] Evaluating infrastructure to destroy..."
 
-# SRE Fix: Create dummy file to satisfy Terraform's file() function during plan
-touch ephemeral_ssh_key.pub
+# SRE Fix: Generate a real but disposable SSH key to satisfy Azure's strict format validation
+ssh-keygen -t ed25519 -f ephemeral_ssh_key -N "" -q
 
-# Create the destruction plan
-terraform plan -destroy -out=destroy.tfplan
+# Create the destruction plan passing the valid dummy key
+terraform plan -destroy -out=destroy.tfplan -var="admin_ip=1.1.1.1" -var="admin_ssh_public_key=$(cat ephemeral_ssh_key.pub)"
 
 echo ""
 echo "Executing Terraform Destroy (Infrastructure)..."
 # Destroy the actual compute resources (VM, VNet, NSG)
 terraform apply -auto-approve destroy.tfplan
 
-# Clean up the dummy key
-rm ephemeral_ssh_key.pub
+# Clean up the dummy keys
+rm -f ephemeral_ssh_key ephemeral_ssh_key.pub
 
 # ------------------------------------------------------------------------------
 # STEP 5: Deep Clean the State Backend (The Brain)
