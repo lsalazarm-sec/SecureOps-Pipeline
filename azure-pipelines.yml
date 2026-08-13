@@ -151,3 +151,15 @@ jobs:
           ansible-playbook -i dynamic_inv.ini -u devsecops --private-key ../infra/ephemeral_ssh_key playbook.yml
 
         displayName: "Step 4: Ansible Configuration & K3s Hardening"
+
+      # ------------------------------------------------------------------------
+      # STEP 5: Publish Kubeconfig Artifact
+      # Description: Intercepts the k3s.yaml extracted by Ansible and publishes
+      # it to the Azure DevOps portal so it can be downloaded to GhostShell.
+      # ------------------------------------------------------------------------
+      - task: PublishPipelineArtifact@1
+        displayName: "Step 5: Publish Kubeconfig Artifact"
+        inputs:
+          targetPath: "infra/k3s.yaml"
+          artifact: "kubeconfig"
+          publishLocation: "pipeline"
