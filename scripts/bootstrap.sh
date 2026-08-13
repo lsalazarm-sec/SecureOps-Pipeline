@@ -20,9 +20,10 @@ set -e
 # 1. Configuration Variables
 RESOURCE_GROUP="rg-secureops-tfstate"
 LOCATION="eastus"
+
 # Storage Account names must be globally unique across Azure. Appending $RANDOM ensures this.
-STORAGE_ACCOUNT_NAME="stsecureops$RANDOM"
-CONTAINER_NAME="tfstate"
+STORAGE_ACCOUNT_NAME="stsecureops${UNIQUE_SUFFIX}"CONTAINER_NAME="tfstate"
+
 # Pipeline Service Principal App ID (Client ID)
 SP_APP_ID="d1f048bc-4d8a-43d1-94c0-44212655533b"
 
