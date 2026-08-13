@@ -112,10 +112,6 @@ jobs:
               -backend-config="use_oidc=true" \
               -backend-config="use_azuread_auth=true"
 
-            # Injects the Storage Account name dynamically from DevOps Secret Variables
-
-            terraform init -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)"
-
             echo "=== 3. Running Terraform Plan ==="
 
             # Creates a strict execution plan. Terraform will automatically consume 
@@ -127,3 +123,29 @@ jobs:
 
             # SRE Practice: Auto-approve using ONLY the strictly audited plan
             terraform apply -auto-approve main.tfplan
+
+      # ------------------------------------------------------------------------
+      # STEP 4: Configuration Management (Ansible & K3s Hardening)
+      # Description: Extracts the dynamic IP from Terraform outputs, bypasses
+      # strict host key checking for the ephemeral VM, and executes the playbook.
+      # ------------------------------------------------------------------------
+      - bash: |
+          echo "=== 1. Extracting Dynamic IP from Terraform ==="
+          cd infra
+          # Extract the raw IP address outputted by Terraform
+          export VM_IP=$(terraform output -raw vm_public_ip)
+          echo "Target VM IP identified as: $VM_IP"
+
+          echo "=== 2. Configuring Ansible Environment ==="
+          cd ../ansible
+
+          # SRE Practice: Disable StrictHostKeyChecking for ephemeral infrastructure
+          # since the agent has never seen this new VM's SSH fingerprint before.
+          export ANSIBLE_HOST_KEY_CHECKING=False
+
+          echo "=== 3. Executing K3s Deployment Playbook ==="
+          # Execute Ansible using the dynamic IP as an in-memory inventory list (note the comma).
+          # We point it to the ephemeral SSH key generated in Step 3.
+          # IMPORTANT: Update 'adminuser' if your Terraform provisions a different SSH username.
+          ansible-playbook -i "$VM_IP," -u adminuser --private-key ../infra/ephemeral_ssh_key playbook.yml
+        displayName: "Step 4: Ansible Configuration & K3s Hardening"
