@@ -50,6 +50,12 @@ if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
 fi
 echo "Found Storage Account: $STORAGE_ACCOUNT_NAME"
 
+echo "[+] Fetching Storage Account Access Key to bypass RBAC..."
+export ARM_ACCESS_KEY=$(az storage account keys list \
+    --resource-group "rg-secureops-tfstate" \
+    --account-name "$STORAGE_ACCOUNT_NAME" \
+    --query "[0].value" -o tsv)
+
 # ------------------------------------------------------------------------------
 # STEP 3: Dynamic Pathing & Initialization
 # Safely navigate to the infrastructure directory regardless of where the script 
