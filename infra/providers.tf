@@ -10,22 +10,24 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      
-      # Locked to v4.x to ensure stability and prevent breaking changes.
-      # v4 deprecates 'use_oidc' and changes the registration syntax.
       version = "~> 4.0"
     }
+  }
+
+  # ============================================================================
+  # REMOTE STATE BACKEND
+  # Description: Enforces remote state storage to prevent orphaned resources.
+  # The storage_account_name is intentionally omitted here as it is injected 
+  # dynamically by the CI/CD pipeline via -backend-config.
+  # ============================================================================
+  backend "azurerm" {
+    resource_group_name  = "rg-secureops-state" # Update this to match your bootstrap RG name
+    container_name       = "tfstate"
+    key                  = "terraform.tfstate"
   }
 }
 
 provider "azurerm" {
-  # The features block is strictly required by the azurerm provider, 
-  # even when left empty, to customize the behavior of specific resources.
   features {} 
-
-  # Standardized v4.x syntax to skip automatic provider registration.
-  # Prevents Terraform from attempting to register all resource providers 
-  # across the Azure subscription, which typically causes authorization 
-  # failures in restricted CI/CD runner environments.
   resource_provider_registrations = "none" 
 }
