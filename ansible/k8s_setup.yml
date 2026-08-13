@@ -67,9 +67,17 @@
         rule: allow
         port: '6443'
         proto: tcp
+    # --------------------------------------------------------------------------
+    # TASK 6: Install K3s (Zero-Touch)
+    # Executes the official K3s installation script.
+    # --------------------------------------------------------------------------
+    - name: Install K3s (Lightweight Kubernetes)
+      ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /etc/rancher/k3s/k3s.yaml
 
     # --------------------------------------------------------------------------
-    # TASK 6: Fetch Kubeconfig for Local Access
+    # TASK 7: Fetch Kubeconfig for Local Access
     # Extracts the cluster credentials to download them from Azure DevOps
     # --------------------------------------------------------------------------
     - name: Fetch Kubeconfig to Azure DevOps workspace
